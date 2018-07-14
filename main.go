@@ -8,6 +8,8 @@ import (
 	"net/http"
 
 	"golang.org/x/net/websocket"
+	"regexp"
+	"log"
 )
 
 type handshakeResponseSelf struct {
@@ -23,11 +25,12 @@ type handshakeResponse struct {
 
 // Bot is the main object
 type Bot struct {
-	Socket   *websocket.Conn
-	Token    string
-	ID       string
-	Commands []CommandInterface
-	Prefix   string
+	Socket		*websocket.Conn
+	Token		string
+	ID			string
+	Commands	[]CommandInterface
+	Listeners	[]ListenerInterface
+	Prefix		string
 }
 
 // New creates a new bot
@@ -90,29 +93,34 @@ func (b *Bot) Handshake() (*Bot, error) {
 
 // Process incoming message
 func (b *Bot) process(message Message) {
-	if !message.IsBotMessage(b.Prefix, b.ID) {
-		return
+	if message.IsBotMessage(b.Prefix, b.ID) {
+		// Strip @BotName from public message
+		message.StripMention(b.ID)
+		// Strip Slack's link markup
+		message.StripLinkMarkup()
+		// Strip the defined command prefix
+		message.StripPrefix(b.Prefix)
+
+		// Check if the message requests the auto-generated help command list
+		// or if we need to search for a command matching the request
+		if message.IsHelpRequest() {
+			b.sendHelp(message)
+			return
+		} else {
+			if b.searchCommand(message) {
+				return
+			}
+		}
 	}
 
-	// Strip @BotName from public message
-	message.StripMention(b.ID)
-	// Strip Slack's link markup
-	message.StripLinkMarkup()
-	// Strip the defined command prefix
-	message.StripPrefix(b.Prefix)
-
-	// Check if the message requests the auto-generated help command list
-	// or if we need to search for a command matching the request
-	if message.IsHelpRequest() {
-		b.sendHelp(message)
-	} else {
-		b.searchCommand(message)
-	}
+	// message is not a command, so pass it on to listeners
+	b.searchListener(message)
 }
 
 // Search for a command matching the message
-func (b *Bot) searchCommand(msg Message) {
+func (b *Bot) searchCommand(msg Message) bool {
 	var cmd CommandInterface
+	c := false
 
 	for i := 0; i < len(b.Commands); i++ {
 		cmd = b.Commands[i]
@@ -120,8 +128,30 @@ func (b *Bot) searchCommand(msg Message) {
 		match, err := cmd.Get().Match(msg.Text())
 		if err == nil {
 			cmd.Handle(NewConversation(match, msg, b.Socket))
+			c = true
 		}
 	}
+
+	return c
+}
+
+func (b *Bot) searchListener(msg Message) bool {
+	var lst ListenerInterface
+	l := false
+
+	for i := 0; i < len(b.Listeners) ;i++  {
+		lst = b.Listeners[i]
+
+		r, _ := regexp.Compile(lst.Get())
+
+		if r.MatchString(msg.Message) {
+			log.Printf("Listener Matched: %v\n", msg.Message)
+			lst.Handle(NewListenerConversation(msg, b.Socket))
+			l = true
+		}
+	}
+
+	return l
 }
 
 // Send the response for a help request
@@ -167,7 +197,18 @@ func (b *Bot) Command(cmd string, handler Handler) {
 	b.Commands = append(b.Commands, NewCommand(cmd, "", handler))
 }
 
-// Register registers a Command
-func (b *Bot) Register(cmd CommandInterface) {
+// Hear adds a new listener with a custom handler
+func (b *Bot) Hear(regex string, handler ListenerHandler) {
+	b.Listeners = append(b.Listeners, NewListener(regex, handler))
+}
+
+// RegisterCommand registers a Command
+func (b *Bot) RegisterCommand(cmd CommandInterface) {
 	b.Commands = append(b.Commands, cmd)
 }
+
+// RegisterListener registers a Listener
+func (b *Bot) RegisterListener(lst ListenerInterface) {
+	b.Listeners = append(b.Listeners, lst)
+}
+

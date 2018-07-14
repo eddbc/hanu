@@ -21,6 +21,15 @@ type ConversationInterface interface {
 	send(msg MessageInterface)
 }
 
+type ListenerConversationInterface interface {
+	Reply(text string, a ...interface{})
+	Message() MessageInterface
+
+	SetConnection(connection Connection)
+
+	send(msg MessageInterface)
+}
+
 // Connection is the needed interface for a connection
 type Connection interface {
 	Send(ws *websocket.Conn, v interface{}) (err error)
@@ -85,6 +94,17 @@ func NewConversation(match allot.MatchInterface, msg Message, socket *websocket.
 	conv := &Conversation{
 		message: msg,
 		match:   match,
+		socket:  socket,
+	}
+
+	conv.SetConnection(websocket.JSON)
+
+	return conv
+}
+
+func NewListenerConversation( msg Message, socket *websocket.Conn) ConversationInterface {
+	conv := &Conversation{
+		message: msg,
 		socket:  socket,
 	}
 
