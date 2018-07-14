@@ -55,10 +55,14 @@ func (m *Message) SetText(text string) {
 // StripMention removes the mention from the message beginning
 func (m *Message) StripMention(user string) {
 	prefix := "<@" + user + "> "
+	m.StripPrefix(prefix)
+}
+
+func (m *Message) StripPrefix(prefix string) {
 	text := m.Text()
 
 	if strings.HasPrefix(text, prefix) {
-		m.SetText(text[len(prefix):len(text)])
+		m.SetText(text[len(prefix):])
 	}
 }
 
@@ -108,4 +112,13 @@ func (m Message) IsMentionFor(user string) bool {
 // IsRelevantFor checks if the message is relevant for a user
 func (m Message) IsRelevantFor(user string) bool {
 	return m.IsMessage() && !m.IsFrom(user) && (m.IsDirectMessage() || m.IsMentionFor(user))
+}
+
+
+func (m Message) HasBotPrefix(prefix string) bool {
+	return strings.HasPrefix(m.Message, prefix)
+}
+
+func (m Message) IsBotMessage(prefix string, botUser string) bool {
+	return m.IsRelevantFor(botUser) || m.HasBotPrefix(prefix)
 }

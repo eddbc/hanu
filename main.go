@@ -27,15 +27,21 @@ type Bot struct {
 	Token    string
 	ID       string
 	Commands []CommandInterface
+	Prefix   string
 }
 
 // New creates a new bot
 func New(token string) (*Bot, error) {
 	bot := Bot{
 		Token: token,
+		Prefix: "!",
 	}
 
 	return bot.Handshake()
+}
+
+func (b *Bot) SetPrefix(prefix string) {
+	b.Prefix = prefix
 }
 
 // Handshake connects to the Slack API to get a socket connection
@@ -84,7 +90,7 @@ func (b *Bot) Handshake() (*Bot, error) {
 
 // Process incoming message
 func (b *Bot) process(message Message) {
-	if !message.IsRelevantFor(b.ID) {
+	if !message.IsBotMessage(b.Prefix, b.ID) {
 		return
 	}
 
@@ -92,6 +98,8 @@ func (b *Bot) process(message Message) {
 	message.StripMention(b.ID)
 	// Strip Slack's link markup
 	message.StripLinkMarkup()
+	// Strip the defined command prefix
+	message.StripPrefix(b.Prefix)
 
 	// Check if the message requests the auto-generated help command list
 	// or if we need to search for a command matching the request
