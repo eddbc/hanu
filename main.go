@@ -157,7 +157,7 @@ func (b *Bot) searchListener(msg Message) bool {
 // Send the response for a help request
 func (b *Bot) sendHelp(msg Message) {
 	var cmd CommandInterface
-	help := "Thanks for asking! I can support you with those features:\n\n"
+	help := "I can support you with those features:\n\n"
 
 	for i := 0; i < len(b.Commands); i++ {
 		cmd = b.Commands[i]
